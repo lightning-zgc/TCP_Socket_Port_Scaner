@@ -16,9 +16,13 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/types.h>
+#include <sys/time.h>
+#include <arpa/inet.h>
+#include <sys/types.h>
 #include <time.h>
 #include <math.h>
 #include <fcntl.h>
+#include <errno.h>
 #define READ_TERMINAL 0
 #define WRITE_TERMINAL 1
 // #define CLOCKS_PER_SEC 1000
@@ -41,9 +45,11 @@ void print_usage(char * cmd)
 
 int main(int argc,char** argv)
 {
-        clock_t start, finish;
+        struct timeval tv;
+        struct timezone tz;
+        gettimeofday(&tv, &tz);
+        int start = tv.tv_sec * 1000000 + tv.tv_usec, finish;
         double duration = 0.0;
-        start = clock();
         struct sockaddr_in server;
         int file_descriptors[2];
         pid_t pid;
@@ -57,10 +63,11 @@ int main(int argc,char** argv)
         int sendnum;
         int recvnum;
         int status;
+        int temp_time;
         char temp[500] = {'\0'};
         char send_buf[2048];
         char recv_buf[2048];
-        char print_buf[2048] = {'\0'};
+        char print_buf[20480] = {'\0'};
 
 
 
@@ -93,9 +100,14 @@ int main(int argc,char** argv)
                 }
                 else if(0==pid)
                 {
+                        // if(0>fcntl(sockfd,F_SETFL,fcntl(sockfd,F_GETFL,0)|/*O_NDELAY*/O_NONBLOCK))
+                        // {
+                        //         printf("fcntl failed/n");
+                        //         _exit(0);
+                        // }
                         if (-1==(sockfd=socket(AF_INET,SOCK_STREAM,0)))
                         {
-                                // perror("can not create socket\n");
+                                perror("can not create socket\n");
                                 _exit(0);
                         }
 
@@ -103,14 +115,18 @@ int main(int argc,char** argv)
                         server.sin_family = AF_INET;
                         server.sin_addr.s_addr = inet_addr(argv[1]);
                         server.sin_port = htons(port);
-
-                        if (connect(sockfd,(struct sockaddr*)&server,sizeof(struct sockaddr)))
+                        temp_time = connect(sockfd,(struct sockaddr*)&server,sizeof(struct sockaddr));
+                        // printf("%d\n",temp_time);
+                        if (temp_time)
                         {
-                                // perror("connect error");
+                                perror("connect error");
+                                //
+                                // sprintf(temp,"port: %d\n",port);
+                                // close(file_descriptors[READ_TERMINAL]);
+                                // write(file_descriptors[WRITE_TERMINAL],temp,sizeof(temp));
                                 close(sockfd);
                                 _exit(0);
                         }
-
                         sprintf(temp,"open port: %d | %s\n",port,getservbyport(htons(port),"tcp")->s_name);
                         close(file_descriptors[READ_TERMINAL]);
                         write(file_descriptors[WRITE_TERMINAL],temp,sizeof(temp));
@@ -124,7 +140,8 @@ int main(int argc,char** argv)
                         close(sockfd);
                         int flag=fcntl(file_descriptors[READ_TERMINAL],F_GETFL,0);
                         flag |= O_NONBLOCK;
-                        if(fcntl(file_descriptors[READ_TERMINAL],F_SETFL,flag) < 0) {
+                        if(fcntl(file_descriptors[READ_TERMINAL],F_SETFL,flag) < 0)
+                        {
                                 perror("fcntl");
                                 exit(1);
                         }
@@ -136,20 +153,22 @@ int main(int argc,char** argv)
                                 waitpid(pid, &status, 0 );
                                 pidcount = 0;
                         }
-                        finish = clock();
-                        duration = (double)(finish - start) / CLOCKS_PER_SEC;
                         system("clear");
+                        // printf("%c[2J", 0x1b);
                         printf("扫描进度:%f%%(port_now:%d)\n",((float)(port - ports) / (porte - ports)) * 100,port);
-                        printf("%f seconds\n", duration);
                         printf("%s",print_buf);
                 }
         }
+        waitpid(pid, &status, 0 );
         system("clear");
+        // printf("%c[2J", 0x1b);
         printf("扫描进度:%f%%(port_now:%d)\n",((float)(port - ports) / (porte - ports)) * 100,port);
         printf("%s",print_buf);
         printf("scan %d ports\n",porte - ports);
-        // duration = (double)(finish - start);
+        gettimeofday(&tv, &tz);
+        finish = tv.tv_sec * 1000000 + tv.tv_usec;
+        duration = (double)(finish - start);
 
 
-        printf("%f seconds\n", duration);
+        printf("%f seconds\n", duration / 1000000);
 }
